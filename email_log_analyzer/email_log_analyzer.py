@@ -1,149 +1,273 @@
-# Este programa analiza un registro de correos electrónicos almacenado en un archivo de texto.
-# Extrae el número de correos enviados por día, así como el número de correos enviados por cada individuo e institución.
-# Los resultados se visualizan en gráficos de barras, que son exportados junto con archivos .csv para análisis adicional.
-
 import matplotlib.pyplot as plt
-import csv
 from tabulate import tabulate
+import csv
+import os
 
-def email_analyzer():
+def folder_creator(results_type):
     """
-    Analiza un archivo de registro de correos y cuenta los correos enviados por día, por remitente individual e institución.
-    
-    Solicita al usuario el nombre de un archivo, analiza su contenido y extrae la información relevante para actualizar
-    los conteos. Permite salir del programa ingresando 'q'.
-    
+    Esta función permite la creación de carpetas para organizar los resultados generados en la ejecución.
+    La función se asegura que el nombre de la carpeta sea válido y que no contenga caracteres restringidos.
+    La función permite crear carpetas específicas para diferentes tipos de resultados (por ejemplo, archivos CSV, gráficos, etc.).
+
+    Args:
+        results_type (str): Descripción del tipo de resultados a almacenar en el folder a crear. Esta info
+        se usa como guía cuando se le indica al usuario asignar el nombre del folder.
+
+    Raises:
+        ValueError: Cuando el nombre de la carpeta es vacío
+        ValueError: Cuando el nombre contiene caracteres restringidos tales como: \/:*?"<>|
+
     Returns:
-        dict: Diccionario con tres claves:
-              - "day": Diccionario con el conteo de correos enviados por día de la semana.
-              - "individual_senders": Diccionario con el conteo de correos enviados por cada remitente individual.
-              - "institutional_senders": Diccionario con el conteo de correos enviados por cada dominio de correo.
+        str: Nombre del folder recién creado, el cual será usado como referencia para escribir los resultados
     """
-    analyzed_log = {
-        "day": {},
-        "individual_senders": {},
-        "institutional_senders": {}
-    }
     while True:
         try:
-            # Solicita el nombre del archivo al usuario
+            invalid_chr = set(r'\/:*?"<>|')
+            folder_name_input = input(f"Enter the folder name to save the '{results_type}' files: ").strip()
+            if folder_name_input.lower() == "q":
+                return None
+            if not folder_name_input:
+                raise ValueError("You entered an empty name. Try it again or type 'q' to cancel.")
+            if any(chr in folder_name_input for chr in invalid_chr):
+                raise ValueError(f"Invalid character for folder name was detected. Avoid {invalid_chr}")
+            if not os.path.exists(folder_name_input):
+                os.makedirs(folder_name_input)
+            return folder_name_input
+        except ValueError as e:
+            print(f"Error: {e}")
+def log_analyzer():
+    """
+    Analiza un registro de correos y extrae la información de correos enviados por remitentes y sellos de tiempo.
+
+    Esta función solicita al usuario el nombre del archivo y luego analiza linea por linea, extrayendo información relevanta como
+    remitente individual, dominio del correo del remitente, la hora, dia, mes y año en el que se enviaron los correos. La informacion extraida
+    se almacena en un diccionario estructurado que lasifica los datos extraidos en diferentes categorias para analisis posteriores.
+
+
+    Returns:
+        dict: Un diccionario con la siguiente estructura:
+        -"individual_sender": Diccinario que contiene el correo del remitente individual y el número de correos que ha enviado
+        -"institutional_sender": Diccionario que contiene los dominios de los correos y el número de correos enviados por dominio
+        -"timestamp": que contiene:
+            -"hour": Diccionario con cada hora del día y el número de correos enviados por cada hora
+            -"week_day": Diccionario con cada día de la semana y el número de correos enviado por cada día
+            -"month": Diccionario que contiene los meses del año y el número de correos enviado por mes
+            -"year": Diccionario que contiene los años en los que enviaron los correos y el número de correos por año.
+    """
+    extracted_info = {"individual_sender": {},
+                      "institutional_sender": {},
+                      "timestamp": {
+                          "hour": {},
+                          "week_day":{},
+                          "month": {},
+                          "year": {}
+                      }
+                      }
+    while True:
+        try:
             fname = input("Enter the file name: ")
-            if fname.lower() == "q":  # Permitir al usuario salir del programa
+            #Permitir salir al usuario salir del programa
+            if fname.lower() == "q":
                 print("Closing the program...")
                 return None
-            
-            # Abrir y leer el archivo línea por línea
-            with open(fname) as file:
+            with open(fname, "r") as file:
                 for line in file:
                     line = line.rstrip()
-                    # Ignorar líneas irrelevantes
-                    if len(line) < 3 or not line.startswith("From "): 
-                        continue
-                    line_elements = line.split()
-                    # Extraer información relevante: día, remitente y dominio
-                    day = line_elements[2]
-                    sender_email = line_elements[1]
-                    institution_domain = sender_email[(sender_email.find("@") + 1):]
-                    
-                    # Actualizar el conteo en cada categoría
-                    analyzed_log["day"][day] = analyzed_log["day"].get(day, 0) + 1
-                    analyzed_log["individual_senders"][sender_email] = analyzed_log["individual_senders"].get(sender_email, 0) + 1
-                    analyzed_log["institutional_senders"][institution_domain] = analyzed_log["institutional_senders"].get(institution_domain, 0) + 1
-
-            return analyzed_log
+                    #Ignorar lineas que no son relevantes
+                    if len(line) == 0 or not line.startswith("From "): continue
+                    line = line.split()
+                    #Extraer informacion con base a composicion de la linea
+                    email_split = line[1].split("@")
+                    hour_extract = line[5].split(":")[0]
+                    ind_email = email_split[0]
+                    inst_email = email_split[1]
+                    weekday_extract = line[2]
+                    month_extract = line[3]
+                    year_extract = line[-1]
+                    #Actualizar el diccionario, añadiendo los datos en la categoria correspondiente
+                    extracted_info["individual_sender"][ind_email] = extracted_info["individual_sender"].get(ind_email, 0) + 1
+                    extracted_info["institutional_sender"][inst_email] = extracted_info["institutional_sender"].get(inst_email, 0) + 1
+                    extracted_info["timestamp"]["hour"][hour_extract] = extracted_info["timestamp"]["hour"].get(hour_extract, 0) + 1
+                    extracted_info["timestamp"]["week_day"][weekday_extract] = extracted_info["timestamp"]["week_day"].get(weekday_extract, 0) +1
+                    extracted_info["timestamp"]["month"][month_extract] = extracted_info["timestamp"]["month"].get(month_extract, 0) + 1
+                    extracted_info["timestamp"]["year"][year_extract] = extracted_info["timestamp"]["year"].get(year_extract, 0) + 1
+                return extracted_info
         except FileNotFoundError:
-            print(f"The file {fname} could not be found. Please try it again or type 'q' to exit.")
-
-def generate_stats(dic):
+            print(f"The file '{fname}' doesn't exist. Try it again. Or type 'q' to exit.")
+def csv_counts_export(dic):
     """
-    Genera estadísticas del análisis de correos y las presenta en una tabla formateada.
-    
-    Calcula el total de correos, el día con más correos, el remitente individual con más correos,
-    la institución con más correos y el promedio de correos por día.
+    Esta función exporta los resultados del análisis por categoria de manera separada en formato .csv,
+    y los guarda en una carpeta o ruta asignada por el usuario
 
     Args:
-        dic (dict): Diccionario con los resultados del análisis de correos.
-
+        dic (dict): Toma como entrada el diccionario producido por la función log_analyzer()
     Returns:
-        None
+        None: Escribe los resultados en archivos .csv separados por nombre de categoria dentro de la carpeta asignada por el usuario
     """
+    # Crear el folder si no existe
+    results_folder = folder_creator("CSV")
+    for category, data in dic.items():
+        try:
+            if category == "timestamp":
+                for sublabel, subdata in data.items():
+                    filename = os.path.join(results_folder, f"{sublabel}_results.csv")
+                    with open(filename, "w", newline="") as outputfile:
+                        writer = csv.writer(outputfile)
+                        writer.writerow([sublabel, "Email counts"])
+                        writer.writerows(subdata.items())
+            else:
+                filename = os.path.join(results_folder, f"{category}_results.csv")
+                with open(filename, "w", newline="") as outputfile:
+                    writer = csv.writer(outputfile)
+                    writer.writerow([category, "Email counts"])
+                    writer.writerows(data.items())
+        except Exception as e:
+            print(f"Ocurrió un error al guardar '{category}': {e}")
+def email_stats(dic):
+    """
+    Calcula las estadisticas de los datos extraidos del email log almacenados en un diccionario que recibe como entrada
+
+    Args:
+        dic (dict): Diccionario que almacena los datos extraídos del email log, con claves como 'individual_sender',
+                    'institutional_sender', y 'timestamp' que contiene las horas, días de la semana y meses.
+
+   Returns:
+        dict: Diccionario con las estadísticas que incluyen el total de correos, promedio de correos por día,
+              remitente con más correos, dominio con más correos, y distribuciones de correo por hora, día y mes
+              organizados de manera cronológica.
+    """
+    days_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    months_order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    total_emails = sum(dic["individual_sender"].values())
+    max_sender = max(dic["individual_sender"].items(), key = lambda item: item[1])
+    max_domain = max(dic["institutional_sender"].items(), key = lambda item: item[1])
+    avg_day = f"{(sum(dic["individual_sender"].values()) / 7):.2f}"
     stats = {
-        "Total de correos": sum(dic["day"].values()),
-        "Día con más correos": f"{max(dic['day'].items(), key=lambda item: item[1])[0]} : {max(dic['day'].items(), key=lambda item: item[1])[1]}",
-        "Individuo con más correos": f"{max(dic['individual_senders'].items(), key=lambda item: item[1])[0]} : {max(dic['individual_senders'].items(), key=lambda item: item[1])[1]}",
-        "Institución con más correos": f"{max(dic['institutional_senders'].items(), key=lambda item: item[1])[0]} : {max(dic['institutional_senders'].items(), key=lambda item: item[1])[1]}",
-        "Promedio de correos por día": f"{(sum(dic['day'].values()) / len(dic['day'])):.2f}"
+        "Total correos": total_emails,
+        "Promedio de correos por día": avg_day,
+        "Remitente con más correos": f"{max_sender[0]}: {max_sender[1]}",
+        "Dominio con más correos": f"{max_domain[0]}: {max_domain[1]}",
+        "Distribución de correos por día de semana": [(day, dic["timestamp"]["week_day"].get(day, 0)) for day in days_order],
+        "Distribución de correos por mes": [(month, dic["timestamp"]["month"].get(month, 0)) for month in months_order],
+        "Distribución de correos por hora": sorted(dic["timestamp"]["hour"].items(), key= lambda item: item[0]),
+        "Distribución de correos por año": sorted(dic["timestamp"]["year"].items(), key= lambda item: item[0])
     }
-    
-    # Crear una tabla con las estadísticas generadas
-    
-    print(tabulate(stats.items(), headers=["Variable", "Resultado"], tablefmt="simple_grid"))
-
-def bar_plots(dic):
+    return stats
+def display_stats(dic):
     """
-    Genera gráficos de barras para visualizar los resultados del análisis y los guarda como archivos de imagen.
-    
+    Esta función muestra las estadisticas de un registro de correos en una tabla formateada
+
     Args:
-        dic (dict): Diccionario con los resultados del análisis de correos.
+        dic (dict): Diccionario que contiene las estadisticas del registro de correos con llaves para estadisticas generales y distribuciones
+                    de correo por hora, día, mes y año
+    Returns:
+        None: Imprime las tablas directamente en la consola.
+    """
+    dic_tuple = list(dic.items())
+    #Mostrar stats generales
+    print("\nEstadisticas generales")
+    print(tabulate(dic_tuple[0:4], headers=["Descriptor", "Resultado"], tablefmt="simple_grid"))
+    #Mostrar estadisticas de distribuciones en tablas separadas
+    for category, data in dic_tuple[4:]:
+        if "día" in category:
+            header = ["Día", "Conteo"]
+        elif "mes" in category:
+            header = ["Mes", "Conteo"]
+        elif "hora" in category:
+            header = ["Hora", "Conteo"]
+        elif "año" in category:
+            header = ["Año", "Conteo"]
+        #imprime el nombre de la categoria de la distribucion y la tabla correspondiente
+        print(category)
+        print(tabulate(data, headers=header, tablefmt="simple_grid"))
+        print() #linea extra para legibilidad
+def plot_data_organizer(dic1, dic2):
+    """
+    Esta función extrae, organiza y retorna una lista de tuplas que contiene los datos de los conteos individuales e institucionales junto con
+    las distribuciones de los conteos por hora, dia mes y año en una lista de tuplas formateada
+    para la generación de gráficos que se usa como entrada en la funcion bar_plot()
+
+    Args:
+        dic1 (dict): Diccionario obtenido con la funcion log_analyzer() para extraer y organizar las listas conteos por individuo y dominio
+        dic2 (dict): Diccionari obtenido con al funcion email_stats() para extraer las listas que contienen la distribución de correos por hora, dia, mes y año
     
     Returns:
-        None
+        list: Lista de tuplas formatada de la forma [(category, data)]
     """
-    # Diccionario para formatear cada gráfico de manera personalizada
-    plot_format = {
-        "day": {
-            "title": "Emails Sent By Day",
-            "xlabel": "Day of The Week",
-            "file_name": "emails_by_day.png"
-        },
-        "individual_senders": {
-            "title": "Emails Sent By Individual",
-            "xlabel": "Individual sender",
-            "file_name": "emails_by_individual_senders.png"
-        },
-        "institutional_senders": {
-            "title": "Emails Sent by Institutional Domains",
-            "xlabel": "Institutional Domains",
-            "file_name": "emails_by_institutional_domains.png"
-        }
-    }
-    
-    # Ordenar y descomponer el diccionario en una lista de tuplas
-    dic_decomposition = dic.items()
-    dic_ordered = []
-    for key, data in dic_decomposition:
-        dic_ordered.append((key, sorted(data.items(), key=lambda item: item[1])))
+    #extracción de los conteos de correos de individuos y dominios a partir del diccionario que tiene todos los conteos
+    sender_data = list(dic1.items())
+    dic1_labeled = [(category, list(data.items())) for category, data in sender_data]
+    dic1_chopped = dic1_labeled[:2]
+    #organizar los conteos de manera ascendente
+    for category, data in dic1_chopped:
+        data.sort(key=lambda item: item[1])
+    #extraccion de las distribuciones de los conteos por hora, día, mes y año del diccionario de las estadisticas
+    distribution_data = list(dic2.items())
+    dic2_labeled = [(category, data) for category, data in distribution_data]
+    dic2_chopped = dic2_labeled[4:]
+    #concatenación de listas para graficar
+    organized_plot_data = dic1_chopped + dic2_chopped
+    return organized_plot_data
+def bar_plot(plot_data):
+    """
+    Genera gráficos de barras que permiten la visualizacion de los resultados del análisis del email log.
 
-    # Crear y guardar cada gráfico de barras
-    for variable, data in dic_ordered:
-        label, value = zip(*data)
-        plt.bar(label, value, width=0.8)
-        plt.title(plot_format[variable]["title"])
-        plt.xlabel(plot_format[variable]["xlabel"])
-        plt.ylabel("Email Counts")
+    Args:
+        plot_data (list): Lista de tuplas generada por la función data_plot_organizer()
+
+    Returns:
+        None: Genera los gráficos de barra y los guarda individualmente.
+    """
+    plot_format = {"individual_sender": {
+        "title": "Emails sent by individual",
+        "xlabel": "Individuals",
+        "filename": "ind_sender_bar_plot.png"
+    },
+    "institutional_sender": {
+        "title": "Emails sent by institutional domain",
+        "xlabel": "Email domains",
+        "filename": "domain_sender_bar_plot.png"
+    },
+    "Distribución de correos por día de semana": {
+        "title": "Mails distribution by day",
+        "xlabel": "Day",
+        "filename": "day_distribution_bar_plot.png"
+    },
+    "Distribución de correos por mes": {
+        "title": "Mails distribution by month",
+        "xlabel": "Month",
+        "filename": "month_distribution_bar_plot.png"
+    },
+    "Distribución de correos por hora": {
+        "title": "Mails distribution by hour",
+        "xlabel": "Hour",
+        "filename": "hour_distribution_bar_plot.png"
+    },
+    "Distribución de correos por año": {
+        "title": "Mails distribution by year",
+        "xlabel": "Year",
+        "filename": "year_distribution_bar_plot.png"
+    }
+    }
+    plots_folder = folder_creator("Plot")
+    for category, data in plot_data:
+        label, datos = zip(*data)
+        plt.bar(label, datos)
+        plt.title(plot_format[category]["title"])
+        plt.xlabel(plot_format[category]["xlabel"])
+        plt.ylabel("Email counts")
         plt.xticks(rotation=90)
         plt.tight_layout()
-        plt.savefig(plot_format[variable]["file_name"], format="png", dpi=300)
-        plt.clf()  # Limpia el gráfico para evitar superposición en la siguiente iteración
+        full_path = os.path.join(plots_folder, plot_format[category]["filename"])
+        plt.savefig(full_path, format = "png", dpi = 300)
+        plt.clf()
 
-def export_results(dic):
-    """Exporta los resultados del análisis del correo en archivos .csv
-    Para cada clave en el diccionario (como 'day', 'individual_senders', 'institutional_senders'),
-    crea un archivo CSV con el nombre de la clave y escribe los datos ordenados por el conteo.
 
-    Args:
-        dic (dict): Diccionario con los resultados del análisis de correos.
-    """
-    for key, dics in dic.items():
-        fname = f"{key}" + ".csv"
-        with open(fname, "w", newline="") as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerow([key, 'Counts']) #escribir el encabezado
-            writer.writerows(sorted(dics.items(), key = lambda item: item[1])) #ordenar la salida de los datos en orden ascendente
-
-# Ejecutar el análisis y visualizar los resultados
-results = email_analyzer()
+results = log_analyzer()
 if results:
-    bar_plots(results)
-    export_results(results)
-    generate_stats(results)
+    csv_counts_export(results)
+    stats = email_stats(results)
+    display_stats(stats)
+    data_to_plot = plot_data_organizer(results, stats)
+    bar_plot(data_to_plot)
+
